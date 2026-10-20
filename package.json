@@ -1,0 +1,14 @@
+{
+  "name": "pocketroute",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PocketRoute by Pocket App Studio",
+  "scripts": {
+    "build:www": "node scripts/build-www.mjs",
+    "test:www": "node scripts/check-www.mjs",
+    "ios:sync": "npm run build:www && npm run test:www && npx cap sync ios"
+  },
+  "dependencies": { "@capacitor/core": "^8.0.0", "@capacitor/ios": "^8.0.0" },
+  "devDependencies": { "@capacitor/cli": "^8.0.0" }
+}

@@ -1,0 +1,6 @@
+{
+  "appId": "com.pocketappstudio.pocketroute",
+  "appName": "PocketRoute",
+  "webDir": "www",
+  "ios": { "contentInset": "never", "backgroundColor": "#0b0d12" }
+}

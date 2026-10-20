@@ -1,0 +1,6 @@
+node_modules/
+__pycache__/
+tests/shots/
+www/
+ios/App/App/public/
+tests/*.png
