@@ -5,6 +5,8 @@ on:
   workflow_dispatch:
     inputs:
       testflight: { description: 'Upload signed build to TestFlight', type: boolean, default: false }
+      archive: { description: 'Build signed release archive (no upload)', type: boolean, default: false }
+      runner: { description: 'macOS runner (macos-15-intel if arm64 has no capacity)', type: choice, options: [macos-26, macos-15-intel], default: macos-26 }
 concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: true
@@ -25,12 +27,12 @@ jobs:
 
   simulator-build:
     needs: web-tests
-    runs-on: macos-26
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     steps:
       - name: Select Xcode 26
         run: |
-          X=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$X/Contents/Developer"
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
           xcodebuild -version
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,11 +48,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: PocketRoute-simulator, path: build/Build/Products/Debug-iphonesimulator/App.app }
 
-  testflight:
-    # Manual only (testflight=true). Mirrors the proven buckledger-ios fastlane pipeline.
-    if: github.event_name == 'workflow_dispatch' && inputs.testflight
+  signed-archive:
+    # Manual only (archive=true). Signed App Store archive, no upload.
+    if: github.event_name == 'workflow_dispatch' && inputs.archive
     needs: simulator-build
-    runs-on: macos-26
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -66,8 +68,41 @@ jobs:
           done
       - name: Select Xcode 26
         run: |
-          X=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$X/Contents/Developer"
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
+          xcodebuild -version
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npm run ios:sync
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3', bundler-cache: true }
+      - run: bundle exec fastlane build_signed
+      - uses: actions/upload-artifact@v4
+        with: { name: PocketRoute-ipa, path: '*.ipa' }
+
+  testflight:
+    # Manual only (testflight=true). Mirrors the proven buckledger-ios fastlane pipeline.
+    if: github.event_name == 'workflow_dispatch' && inputs.testflight
+    needs: simulator-build
+    runs-on: ${{ inputs.runner || 'macos-26' }}
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      DIST_CERT_P12_BASE64: ${{ secrets.DIST_CERT_P12_BASE64 }}
+      DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+    steps:
+      - name: Check secrets
+        run: |
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID DIST_CERT_P12_BASE64; do
+            [ -n "${!v}" ] || { echo "::error::Missing secret $v"; exit 1; }
+          done
+      - name: Select Xcode 26
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X/Contents/Developer"; fi
           xcodebuild -version
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
